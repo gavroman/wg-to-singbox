@@ -1,0 +1,40 @@
+{
+  "name": "sing-box-configs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "provision": "tsx src/cli/main.ts provision",
+    "wg": "tsx src/cli/main.ts wg",
+    "convert": "tsx src/cli/main.ts convert",
+    "upload": "tsx src/cli/main.ts upload",
+    "connect": "tsx src/cli/main.ts connect",
+    "configs:pull": "tsx src/cli/main.ts configs:pull",
+    "rules:update": "tsx src/cli/main.ts rules:update",
+    "test": "vitest run --exclude '**/sing-box.test.ts'",
+    "test:sing-box": "vitest run test/sing-box.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1161.0",
+    "commander": "15.0.0",
+    "ipaddr.js": "2.5.0",
+    "qrcode": "1.5.4",
+    "dotenv": "18.0.9",
+    "envalid": "9.0.0",
+    "tsx": "4.23.15"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/pngjs": "6.0.5",
+    "@types/qrcode": "1.5.6",
+    "jsqr": "1.4.0",
+    "pngjs": "7.0.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  },
+  "engines": {
+    "node": ">=24.22.1 <25"
+  }
+}

@@ -1,0 +1,16 @@
+node_modules/
+coverage/
+.env
+.env.*
+!.env.example
+.aws/
+credentials
+/artifacts/
+.configs-pull-*/
+.configs-backup-*/
+*.conf
+*.qr.png
+sing.json
+sf-sing.json
+cache.db*
+.DS_Store
