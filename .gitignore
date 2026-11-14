@@ -6,6 +6,8 @@ coverage/
 .aws/
 credentials
 /artifacts/
+/exports/
+vpn*.private.json
 .configs-pull-*/
 .configs-backup-*/
 *.conf

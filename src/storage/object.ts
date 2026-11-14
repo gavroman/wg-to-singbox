@@ -13,7 +13,8 @@ export function validateStorage(options: StorageOptions): void {
   if (!options.region || !options.accessKeyId || !options.secretAccessKey) throw new UserError('Не заданы настройки доступа к S3.');
 }
 
-export async function publishObject(options: StorageOptions, key: string, contents: string | Buffer): Promise<string> {
+export async function publishObject(options: StorageOptions, key: string, contents: string | Buffer,
+  write: { createOnly?: boolean } = {}): Promise<string> {
   validateStorage(options);
   const contentType = objectContentType(key);
   const bytes = Buffer.isBuffer(contents) ? contents : Buffer.from(contents, 'utf8');
@@ -23,6 +24,7 @@ export async function publishObject(options: StorageOptions, key: string, conten
       Bucket: options.bucket, Key: key, Body: bytes, ContentType: contentType, ACL: 'public-read',
       ...(contentType.startsWith('text/html') ? { ContentDisposition: 'inline' } : {}),
       CacheControl: key.startsWith('profiles/') ? 'no-store' : 'no-cache',
+      ...(write.createOnly ? { IfNoneMatch: '*' } : {}),
     }), { abortSignal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   } catch {
     throw new UserError('Не удалось загрузить объект в S3. Проверьте ключи, права, endpoint и доступность сети; локальные файлы сохранены.');
@@ -44,4 +46,25 @@ export async function readObject(options: StorageOptions, key: string): Promise<
     headers: { 'Cache-Control': 'no-cache' },
   }, `Скачивание S3 ${key}`);
   return response.bytes;
+}
+
+// Optional means absent, never inaccessible. Keep statuses separate before sanitizing errors.
+export async function readOptionalObject(options: StorageOptions, key: string): Promise<Buffer | undefined> {
+  validateStorage(options);
+  const url = objectUrl(options, key);
+  try {
+    const response = await fetch(url, {
+      headers: { 'Cache-Control': 'no-cache' }, redirect: 'error',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (response.status === 404) { await response.body?.cancel(); return undefined; }
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new UserError(`Скачивание S3 ${key}: HTTP ${response.status}.`);
+    }
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    if (error instanceof UserError) throw error;
+    throw new UserError(`Скачивание S3 ${key}: ошибка сети или таймаут.`);
+  }
 }

@@ -3,11 +3,11 @@ import type { WireGuardConfig } from '../types.js';
 import { invalidConfig } from '../shared/errors.js';
 import { containsIp, coversIpv6Internet, integer, parseEndpoint, validateCidr } from './network.js';
 
-export function validateWireGuard(wg: WireGuardConfig): void {
+export function validateWireGuard(wg: WireGuardConfig, requireDns = true): void {
   validateKey(wg.privateKey, 'PrivateKey');
   if (!wg.addresses.length) invalidConfig('не хватает Address');
   wg.addresses.forEach(cidr => validateCidr(cidr, 'Address'));
-  if (!wg.dns.some(address => isIP(address))) invalidConfig('не хватает DNS');
+  if (requireDns && !wg.dns.some(address => isIP(address))) invalidConfig('не хватает DNS');
   if (wg.dns.some(address => !isIP(address))) invalidConfig('DNS: нужен IP-адрес');
   if (!wg.peers.length) invalidConfig('нет Peer');
   const peerKeys = new Set<string>();

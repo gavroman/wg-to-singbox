@@ -4,7 +4,11 @@ import { normalizeProfileName } from '../shared/profile-name.js';
 import { selectNetwork, validateWireGuard } from './validation.js';
 
 export function buildSingBoxConfig(wg: WireGuardConfig, rulesUrl: string, name = 'vpn'): JsonObject {
-  name = normalizeProfileName(name);
+  return buildSingleWireGuardConfig(wg, rulesUrl, normalizeProfileName(name));
+}
+
+// The new pipeline supplies the exact connection name; the legacy wrapper retains its API.
+export function buildSingleWireGuardConfig(wg: WireGuardConfig, rulesUrl: string, name: string): JsonObject {
   validateUrl(rulesUrl, 'VPN_RULES_URL', true);
   validateWireGuard(wg);
   const { ipv6, dns } = selectNetwork(wg);

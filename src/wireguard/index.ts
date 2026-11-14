@@ -16,11 +16,14 @@ export async function obtainWireGuard(options: WgOptions, onSelected?: OnClientS
   let selected = findExisting(before, options);
   let created = false;
   if (!selected) {
-    await api.createClient(options.name);
+    let createError: unknown;
+    try { await api.createClient(options.name); } catch (error) { createError = error; }
+    // A lost response is not a reason to create a second client. Read back once.
     const after = await api.listClients();
     const oldIds = new Set(before.map(client => client.id));
     const matches = after.filter(client => client.name === options.name);
     if (matches.length !== 1 || oldIds.has(matches[0]!.id)) {
+      if (!matches.length && createError) throw createError;
       throw new UserError('Не удалось однозначно определить созданного клиента. Укажите --client-id; клиенты не удалялись.');
     }
     selected = matches[0]!;

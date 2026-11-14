@@ -16,6 +16,7 @@ export function profilePaths(name: string, directory = ARTIFACTS_DIRECTORY) {
   const directoryName = `${name}--${Buffer.from(name, 'utf8').toString('hex')}`;
   const root = resolve(directory, 'profiles', directoryName);
   return { root, wireGuard: join(root, 'wireguard.conf'), singBox: join(root, 'sing-box.json'),
+    connections: join(root, 'connections.json'),
     qr: join(root, 'qr.png'), page: join(root, 'index.html'), data: join(root, 'data.json') };
 }
 

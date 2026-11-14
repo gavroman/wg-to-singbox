@@ -9,6 +9,7 @@ export interface WorkingProfile {
   client: string;
   result: string;
   wireGuard: string;
+  connections: string;
   singBox: string;
   qr: string;
   page: string;
@@ -19,6 +20,7 @@ export async function createWorkingProfile(name: string): Promise<WorkingProfile
   const root = await mkdtemp(join(tmpdir(), `libertd-${normalizeProfileName(name)}-`));
   return { root, client: join(root, 'client.json'), result: join(root, 'result.json'),
     wireGuard: join(root, 'wireguard.conf'), singBox: join(root, 'sing-box.json'),
+    connections: join(root, 'connections.json'),
     qr: join(root, 'qr.png'), page: join(root, 'index.html'), data: join(root, 'data.json') };
 }
 

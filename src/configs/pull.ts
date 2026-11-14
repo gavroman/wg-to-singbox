@@ -7,12 +7,30 @@ import { writePrivateFile } from '../artifacts/files.js';
 import { createSnapshotStage, ensureDirectory, installSnapshot } from '../artifacts/snapshot.js';
 import { profileKeys } from '../storage/keys.js';
 import { listProfiles } from '../storage/profiles.js';
-import { readObject, validateStorage } from '../storage/object.js';
+import { readObject, readOptionalObject, validateStorage, objectUrl } from '../storage/object.js';
+import { parseJsonObject } from '../shared/json.js';
+import { normalizeProfileName } from '../shared/profile-name.js';
+import { UserError } from '../shared/errors.js';
 
 async function downloadProfileFiles(storage: StorageOptions, name: string, paths: ReturnType<typeof profilePaths>): Promise<void> {
   const keys = profileKeys(name);
-  for (const file of ['singBox', 'wireGuard', 'qr', 'page', 'data'] as const) {
+  const dataBytes = await readObject(storage, keys.data);
+  const data = parseJsonObject(dataBytes.toString('utf8'));
+  if (data.name !== normalizeProfileName(name)) throw new UserError('Метаданные S3 не соответствуют профилю.');
+  await writePrivateFile(paths.data, dataBytes);
+  for (const file of ['singBox', 'qr', 'page'] as const) {
     await writePrivateFile(paths[file], await readObject(storage, keys[file]));
+  }
+  if (data.connectionsUrl !== undefined) {
+    if (data.connectionsUrl !== objectUrl(storage, keys.connections)) throw new UserError('Некорректный URL мапки подключений в data.json.');
+    await writePrivateFile(paths.connections, await readObject(storage, keys.connections));
+    const wireGuard = await readOptionalObject(storage, keys.wireGuard);
+    if (wireGuard !== undefined) await writePrivateFile(paths.wireGuard, wireGuard);
+    else if (data.wireGuardUrl !== undefined) throw new UserError('В data.json указан отсутствующий WireGuard-файл.');
+  } else {
+    await writePrivateFile(paths.wireGuard, await readObject(storage, keys.wireGuard));
+    const connections = await readOptionalObject(storage, keys.connections);
+    if (connections !== undefined) await writePrivateFile(paths.connections, connections);
   }
 }
 
@@ -23,7 +41,7 @@ export async function pullProfile(storage: StorageOptions, name: string, directo
   await ensureDirectory(dirname(paths.root));
   const stage = await createSnapshotStage(paths.root);
   const staged = { ...paths, root: stage };
-  for (const file of ['singBox', 'wireGuard', 'qr', 'page', 'data'] as const) staged[file] = join(stage, relative(paths.root, paths[file]));
+  for (const file of ['singBox', 'wireGuard', 'connections', 'qr', 'page', 'data'] as const) staged[file] = join(stage, relative(paths.root, paths[file]));
   try {
     await downloadProfileFiles(storage, name, staged);
     await installSnapshot(stage, paths.root);

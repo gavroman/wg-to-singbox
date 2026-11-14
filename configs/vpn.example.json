@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "s3": {
+    "endpoint": "https://storage.yandexcloud.net",
+    "region": "ru-central1",
+    "bucket": "example-vpn-configs",
+    "accessKeyId": "REPLACE_ME",
+    "secretAccessKey": "REPLACE_ME"
+  },
+  "panels": {
+    "wg-main": {
+      "type": "wg-easy",
+      "url": "https://wg.example.com",
+      "password": "REPLACE_ME"
+    },
+    "3x-main": {
+      "type": "3x-ui",
+      "url": "https://panel.example.com/",
+      "apiToken": "REPLACE_ME"
+    }
+  },
+  "connections": {
+    "wg-easy": {
+      "type": "wireguard",
+      "panel": "wg-main"
+    },
+    "3x-wg": {
+      "type": "wireguard",
+      "panel": "3x-main",
+      "inbound": {
+        "port": 51822,
+        "subnet": "10.20.0.0/24",
+        "mtu": 1420
+      }
+    },
+    "3x-vless": {
+      "type": "vless-reality",
+      "panel": "3x-main",
+      "inbound": {
+        "port": 443,
+        "reality": {
+          "target": "dl.google.com:443",
+          "serverNames": [
+            "dl.google.com"
+          ]
+        }
+      }
+    }
+  },
+  "urltest": {
+    "url": "https://www.gstatic.com/generate_204",
+    "interval": "1m",
+    "tolerance": 80
+  },
+  "routing": {
+    "rulesUrl": "https://storage.yandexcloud.net/example-vpn-configs/rules/vpn_rules.json"
+  },
+  "dns": {
+    "server": "1.1.1.1",
+    "serverName": "cloudflare-dns.com"
+  }
+}

@@ -1,6 +1,6 @@
 import { TEST_RULES_URL } from './fixtures/config.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, readFile, readdir, rm, stat, chmod, symlink, link, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat, chmod, symlink, link, writeFile, cp, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
@@ -77,7 +77,7 @@ describe('pipeline with local HTTPS and S3 mocks', () => {
 
   it('does not retry ambiguous creation', async () => {
     mock.state.creation = 'lost';
-    await expect(obtainWireGuard(wg(mock.url))).rejects.toThrow('неизвестен');
+    expect(await obtainWireGuard(wg(mock.url))).toMatchObject({ clientId: 'client-1', created: true });
     expect(mock.state.requests.filter(r => r.method === 'POST' && r.path.endsWith('/client'))).toHaveLength(1);
     expect(await obtainWireGuard(wg(mock.url))).toMatchObject({ clientId: 'client-1', created: false });
     mock.state.clients = []; mock.state.creation = 'duplicate';
@@ -240,8 +240,10 @@ describe('pipeline with local HTTPS and S3 mocks', () => {
   });
 
   it('rejects HTTP upload endpoints before publishing', async () => {
-    const commands = handlers({ S3_ENDPOINT: mock.url.replace('https:', 'http:'), S3_BUCKET: 'test-bucket', S3_ACCESS_KEY_ID: 'test', S3_SECRET_ACCESS_KEY: 'test' }, () => {});
-    await expect(commands.upload({ input: 'unused.json', name })).rejects.toThrow('HTTPS');
+    const config = join(directory, 'private.json');
+    await writeFile(config, JSON.stringify({ version: 1, s3: settings(mock.url.replace('https:', 'http:')) }));
+    const commands = handlers({ VPN_CONFIG: config }, () => {});
+    await expect(commands.upload({ input: 'unused.json', name })).rejects.toThrow('s3.endpoint');
     expect(mock.state.requests).toHaveLength(0);
   });
 
@@ -335,31 +337,38 @@ describe('pipeline with local HTTPS and S3 mocks', () => {
 
   it('runs the complete cli pipeline', async () => {
     const cliName = `test-${process.pid}`;
-    const env = { ...process.env, WG_EASY_URL: mock.url, WG_EASY_PASSWORD: 'test',
-      S3_ENDPOINT: mock.url, S3_BUCKET: 'test-bucket', S3_REGION: 'ru-central1',
-      S3_ACCESS_KEY_ID: 'synthetic-key', S3_SECRET_ACCESS_KEY: 'synthetic-secret', VPN_RULES_URL: TEST_RULES_URL };
+    const configPath = join(directory, 'private.json');
+    await writeFile(configPath, JSON.stringify({ version: 1, s3: settings(mock.url),
+      panels: { main: { type: 'wg-easy', url: mock.url, password: 'test' } },
+      connections: { 'wg-easy': { type: 'wireguard', panel: 'main' } },
+      routing: { rulesUrl: TEST_RULES_URL } }));
+    const env = { ...process.env, VPN_CONFIG: configPath };
+    const project = join(directory, 'project');
+    await cp(join(PACKAGE_ROOT, 'src'), join(project, 'src'), { recursive: true });
+    await copyFile(join(PACKAGE_ROOT, 'package.json'), join(project, 'package.json'));
+    await symlink(join(PACKAGE_ROOT, 'node_modules'), join(project, 'node_modules'), 'dir');
     try {
       const args = ['--import', 'tsx', 'src/cli/main.ts', 'provision', '--name', cliName];
-      const first = await exec(process.execPath, args, { cwd: PACKAGE_ROOT, env });
+      const first = await exec(process.execPath, args, { cwd: project, env });
       const result = JSON.parse(first.stdout);
       expect(result.name).toBe(`sf-${cliName}`); expect(result.importUri).toContain('sing-box://');
       expect(await stat(result.qrPath)).toBeDefined();
       expect(first.stdout).not.toContain('synthetic-secret');
       const apiCount = mock.state.requests.filter(request => request.path.startsWith('/api/')).length;
       const uploaded = await exec(process.execPath, ['--import', 'tsx', 'src/cli/main.ts', 'upload',
-        '--input', result.singBoxPath, '--wireguard', result.wireGuardPath, '--name', cliName], {
-        cwd: PACKAGE_ROOT, env: { ...env, WG_EASY_URL: '', WG_EASY_PASSWORD: '' },
+        '--input', result.singBoxPath, '--connections', result.connectionsPath, '--name', cliName], {
+        cwd: project, env: { ...env, WG_EASY_URL: '', WG_EASY_PASSWORD: '' },
       });
       expect(JSON.parse(uploaded.stdout).dataUrl).toBe(`${mock.url}/test-bucket/profiles/sf-${cliName}/data.json`);
       expect(mock.state.requests.filter(request => request.path.startsWith('/api/'))).toHaveLength(apiCount);
-      await exec(process.execPath, [...args.slice(0, -1), `sf-${cliName}`], { cwd: PACKAGE_ROOT, env });
+      await exec(process.execPath, [...args.slice(0, -1), `sf-${cliName}`], { cwd: project, env });
       expect(mock.state.clients).toHaveLength(1);
       expect(mock.state.clients[0]?.name).toBe(`sf-${cliName}`);
       expect(result.profileUrl).toBe(`${mock.url}/test-bucket/profiles/sf-${cliName}/sing-box.json`);
-      await expect(exec(process.execPath, [...args.slice(0, -1), '../bad'], { cwd: PACKAGE_ROOT, env })).rejects.toMatchObject({ code: 1 });
+      await expect(exec(process.execPath, [...args.slice(0, -1), '../bad'], { cwd: project, env })).rejects.toMatchObject({ code: 1 });
       const input = join(directory, 'vpn.conf');
       await writeFile(input, '[Interface]\n');
-      await expect(exec(process.execPath, ['--import', 'tsx', 'src/cli/main.ts', 'convert', '--input', input], { cwd: PACKAGE_ROOT, env })).rejects.toMatchObject({ code: 1 });
-    } finally { await rm(profilePaths(cliName).root, { recursive: true, force: true }); }
+      await expect(exec(process.execPath, ['--import', 'tsx', 'src/cli/main.ts', 'convert', '--input', input], { cwd: project, env })).rejects.toMatchObject({ code: 1 });
+    } finally { /* Isolated project is removed by afterEach. */ }
   }, 20_000);
 });

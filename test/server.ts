@@ -1,9 +1,31 @@
 import { createServer } from 'node:https';
 import type { IncomingHttpHeaders } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { wireGuard } from './fixtures/config.js';
+
+let credentials: Promise<{ key: Buffer; cert: Buffer }> | undefined;
+
+async function createTestCredentials() {
+  const directory = await mkdtemp(join(tmpdir(), 'libertd-test-tls-'));
+  try {
+    const keyPath = join(directory, 'localhost.key');
+    const certPath = join(directory, 'localhost.crt');
+    await promisify(execFile)('openssl', [
+      'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+      '-subj', '/CN=localhost', '-keyout', keyPath, '-out', certPath,
+    ], { timeout: 10_000 });
+    const [key, cert] = await Promise.all([readFile(keyPath), readFile(certPath)]);
+    return { key, cert };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
 
 export async function mockServices() {
   const state = {
@@ -14,10 +36,8 @@ export async function mockServices() {
     failUpload: false, failUploadKey: '', failDownload: false, corruptRead: false, privateRead: false,
     failList: false, listPageSize: 1000,
   };
-  const server = createServer({
-    key: await readFile(new URL('./fixtures/localhost.key', import.meta.url)),
-    cert: await readFile(new URL('./fixtures/localhost.crt', import.meta.url)),
-  }, async (req, res) => {
+  // Reuse the in-memory pair within this test worker; temporary files are already removed.
+  const server = createServer(await (credentials ??= createTestCredentials()), async (req, res) => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
     const bytes = Buffer.concat(chunks);
@@ -61,6 +81,9 @@ export async function mockServices() {
     }
     if (req.method === 'PUT') {
       if (state.failUpload || path.split('?')[0] === state.failUploadKey) { res.writeHead(403); res.end(); return; }
+      if (req.headers['if-none-match'] === '*' && state.objects.has(path.split('?')[0]!)) {
+        res.writeHead(412); res.end(); return;
+      }
       state.objects.set(path.split('?')[0]!, bytes);
       state.objectHeaders.set(path.split('?')[0]!, req.headers);
       res.setHeader('ETag', '"test"'); res.end(); return;

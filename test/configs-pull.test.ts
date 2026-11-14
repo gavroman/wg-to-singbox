@@ -22,6 +22,7 @@ beforeEach(async () => {
   mock.state.objects.set('/test-bucket/rules/vpn_rules.json', Buffer.from('{"version":5,"rules":[]}'));
   for (const name of ['sf-phone', 'sf-Phone']) {
     for (const file of files) mock.state.objects.set(`/test-bucket/profiles/${name}/${file}`, Buffer.from(`${name}/${file}\n`));
+    mock.state.objects.set(`/test-bucket/profiles/${name}/data.json`, Buffer.from(JSON.stringify({ name })));
   }
 });
 afterEach(async () => {
@@ -29,7 +30,7 @@ afterEach(async () => {
   finally { vi.unstubAllEnvs(); }
 });
 
-it('recreates the cache byte for byte from S3, without local metadata', async () => {
+it('recreates profile files byte for byte without service metadata', async () => {
   await writePrivateFile(join(cache, 'old-profile/metadata/client.json'), 'stale');
   await writePrivateFile(profilePaths('phone', cache).singBox, 'unpublished-local-edit');
   mock.state.listPageSize = 2;

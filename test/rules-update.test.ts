@@ -61,6 +61,7 @@ describe('rules:update with local S3', () => {
     for (const file of ['wireguard.conf', 'qr.png', 'index.html', 'data.json']) {
       mock.state.objects.set(`/test-bucket/profiles/${name}/${file}`, Buffer.from(`cloud-${file}`));
     }
+    mock.state.objects.set(`/test-bucket/profiles/${name}/data.json`, Buffer.from(JSON.stringify({ name })));
     return config;
   }
 
@@ -72,6 +73,7 @@ describe('rules:update with local S3', () => {
       for (const file of ['wireguard.conf', 'qr.png', 'index.html', 'data.json']) {
         mock.state.objects.set(`/test-bucket/profiles/${name}/${file}`, Buffer.from(`unchanged-${file}`));
       }
+      mock.state.objects.set(`/test-bucket/profiles/${name}/data.json`, Buffer.from(JSON.stringify({ name })));
     }
     const before = new Map([...mock.state.objects].map(([key, value]) => [key, Buffer.from(value)]));
     mock.state.listPageSize = 2;
@@ -155,9 +157,9 @@ describe('rules:update with local S3', () => {
     const rulesUrl = `${mock.url}/test-bucket/rules/vpn_rules.json`;
     const name = `sf-rules-test-${process.pid}`;
     seedProfile(name, rulesUrl);
-    const env = { ...process.env, WG_EASY_URL: '', WG_EASY_PASSWORD: '',
-      S3_ENDPOINT: mock.url, S3_BUCKET: 'test-bucket', S3_REGION: 'ru-central1',
-      S3_ACCESS_KEY_ID: 'synthetic-key', S3_SECRET_ACCESS_KEY: 'synthetic-secret' };
+    const configPath = join(directory, 'vpn.private.json');
+    await writePrivateFile(configPath, formatJson({ version: 1, s3: settings(mock.url) }));
+    const env = { ...process.env, WG_EASY_URL: '', WG_EASY_PASSWORD: '', VPN_CONFIG: configPath };
     const project = join(directory, 'project');
     await cp(join(PACKAGE_ROOT, 'src'), join(project, 'src'), { recursive: true });
     await copyFile(join(PACKAGE_ROOT, 'package.json'), join(project, 'package.json'));

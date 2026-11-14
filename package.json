@@ -14,16 +14,21 @@
     "rules:update": "tsx src/cli/main.ts rules:update",
     "test": "vitest run --exclude '**/sing-box.test.ts'",
     "test:sing-box": "vitest run test/sing-box.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "config:check": "tsx src/cli/main.ts config:check",
+    "panels:check": "tsx src/cli/main.ts panels:check",
+    "profiles:list": "tsx src/cli/main.ts profiles:list",
+    "profiles:update": "tsx src/cli/main.ts profiles:update"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1161.0",
     "commander": "15.0.0",
-    "ipaddr.js": "2.5.0",
-    "qrcode": "1.5.4",
     "dotenv": "18.0.9",
     "envalid": "9.0.0",
-    "tsx": "4.23.15"
+    "ipaddr.js": "2.5.0",
+    "qrcode": "1.5.4",
+    "tsx": "4.23.15",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

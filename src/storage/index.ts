@@ -6,7 +6,7 @@ import { publishObject } from './object.js';
 
 export { parseJsonObject } from '../shared/json.js';
 export { profileKey, profileKeys } from './keys.js';
-export { publishObject, validateStorage } from './object.js';
+export { publishObject, validateStorage, readObject, readOptionalObject, objectUrl } from './object.js';
 
 export async function publishJson(options: StorageOptions, key: string, contents: string): Promise<string> {
   parseJsonObject(contents);
